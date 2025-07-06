@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemeHub - Загружай и создавай мемы</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <a href="/" class="logo">
+                <i class="fas fa-grin-squint-tears"></i>
+                Название
+            </a>
+            
+            <div class="search-bar">
+                <input type="text" placeholder="Поиск шаблонов мемов...">
+                <button type="submit"><i class="fas fa-search"></i></button>
+            </div>
+            
+            <div class="auth-buttons">
+                <a href="#" class="btn btn-outline" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </a>
+                <a href="#" class="btn btn-primary" id="uploadBtn">
+                    <i class="fas fa-upload"></i> Загрузить
+                </a>
+            </div>
+        </nav>
+    </header>
+    
+    <main>
+        <section class="all-templates">
+            <h2 class="section-title">Все шаблоны мемов</h2>
+            <div class="templates-grid">
+                <!-- Шаблоны будут добавляться через JavaScript -->
+            </div>
+        </section>
+    </main>
+    
+    <!-- Модальные окна -->
+    <div class="modal" id="uploadModal">
+        <!-- Содержимое модального окна загрузки -->
+    </div>
+    
+    <div class="modal" id="loginModal">
+        <!-- Содержимое модального окна входа -->
+    </div>
+    
+    <div class="modal" id="registerModal">
+        <!-- Содержимое модального окна регистрации -->
+    </div>
+
+    <script src="js/modals.js"></script>
+    <script src="js/favorites.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
