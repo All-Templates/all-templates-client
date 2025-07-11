@@ -255,7 +255,6 @@ function initTemplateCards() {
             const img = card.querySelector('img');
             const imageUrl = img.src;
             console.log('Выбран шаблон:', imageUrl);
-            // Здесь можно добавить открытие редактора
         }
     });
 }
