@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemeHub - Редактор мемов</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <a href="/" class="logo">
+                <i class="fas fa-grin-squint-tears"></i>
+                MemeHub
+            </a>
+            <div class="editor-toolbar">
+                <button class="btn btn-outline" id="backBtn">
+                    <i class="fas fa-arrow-left"></i> Назад
+                </button>
+                <button class="btn btn-primary" id="downloadBtn">
+                    <i class="fas fa-download"></i> Скачать мем
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <div class="editor-container">
+        <div class="editor-content">
+            <div class="canvas-container">
+                <canvas id="memeCanvas"></canvas>
+            </div>
+            
+            <div class="editor-controls">
+                <div class="control-group">
+                    <h3>Текст мема</h3>
+                    <div class="form-group">
+                        <label for="topText">Верхний текст</label>
+                        <input type="text" id="topText" class="form-control" placeholder="Введите верхний текст">
+                    </div>
+                    <div class="form-group">
+                        <label for="bottomText">Нижний текст</label>
+                        <input type="text" id="bottomText" class="form-control" placeholder="Введите нижний текст">
+                    </div>
+                    <div class="form-group">
+                        <label>Цвет текста</label>
+                        <div class="color-picker">
+                            <div class="color-option selected" style="background-color: white;" data-color="white"></div>
+                            <div class="color-option" style="background-color: black;" data-color="black"></div>
+                            <div class="color-option" style="background-color: red;" data-color="red"></div>
+                            <div class="color-option" style="background-color: yellow;" data-color="yellow"></div>
+                            <div class="color-option" style="background-color: blue;" data-color="blue"></div>
+                            <input type="color" id="customColor" style="width: 25px; height: 25px; border: none; cursor: pointer;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="fontSize">Размер шрифта</label>
+                        <input type="range" id="fontSize" min="10" max="100" value="40" class="form-control">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Превью текста</h3>
+                    <div class="text-preview" id="topTextPreview">Верхний текст</div>
+                    <div class="text-preview" id="bottomTextPreview">Нижний текст</div>
+                </div>
+
+                <button class="btn btn-primary download-btn" id="finalDownloadBtn">
+                    <i class="fas fa-download"></i> Скачать готовый мем
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="editor.js"></script>
+</body>
+</html>
