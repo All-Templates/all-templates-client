@@ -1,3 +1,5 @@
+import API_CONFIG from './api-config.js';
+
 document.addEventListener('DOMContentLoaded', function() {
     // Получаем параметры из URL
     const urlParams = new URLSearchParams(window.location.search);
