@@ -1,13 +1,4 @@
-// Конфигурация API
-const API_CONFIG = {
-    BASE_URL: 'https://finely-mature-naiad.cloudpub.ru',
-    ENDPOINTS: {
-        TEMPLATES: '/api/templates',
-        DOWNLOAD: '/api/templates/download',
-        CREATE: '/api/templates/create',
-        TEMPLATE_DETAILS: '/api/templates'
-    }
-};
+import API_CONFIG from './api-config.js';
 
 // DOM элементы
 const uploadBtn = document.getElementById('uploadBtn');
