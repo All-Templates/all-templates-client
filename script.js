@@ -71,8 +71,8 @@ function initTemplateClickHandlers() {
     document.querySelectorAll('.template-card').forEach(card => {
         card.addEventListener('click', function () {
             const templateId = this.dataset.id;
-            // Переходим к редактору с ID шаблона
-            window.location.href = `https://all-templates.github.io/all-templates-client/edit/?templateId=${templateId}`;
+            // Переходим к редактору с ID шаблона (относительный путь)
+            window.location.href = `editor/?templateId=${templateId}`;
         });
     });
 }
