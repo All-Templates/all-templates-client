@@ -15,40 +15,39 @@ const uploadForm = document.getElementById('uploadForm');
 const submitBtn = document.getElementById('submitBtn');
 const templateKeywords = document.getElementById('templateKeywords');
 const templateFile = document.getElementById('templateFile');
+const paginationContainer = document.getElementById('pagination');
+const prevPageBtn = document.getElementById('prevPage');
+const nextPageBtn = document.getElementById('nextPage');
+const pageInfo = document.getElementById('pageInfo');
+
+// Настройки пагинации
+const ITEMS_PER_PAGE = 12;
+let currentPage = 1;
+let totalPages = 1;
+let allTemplateIds = [];
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
-    loadTemplates();
+    loadAllTemplates();
     initModalWindows();
-    initTemplateCards();
     initUploadForm();
 });
 
-// Загрузка шаблонов мемов
-async function loadTemplates() {
+// Загрузка всех шаблонов для пагинации
+async function loadAllTemplates() {
     try {
         showLoading(true);
-        templatesGrid.innerHTML = '';
-
-        // Загружаем список ID шаблонов
+        
+        // Загружаем список всех ID шаблонов
         const idsResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEMPLATES}`);
-        const templateIds = await idsResponse.json();
-
-        // Создаем карточки для каждого шаблона
-        templatesGrid.innerHTML = templateIds.map(id => `
-            <div class="template-card" data-id="${id}">
-                <img src="${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOWNLOAD}/${id}"
-                     alt="Шаблон мема"
-                     class="template-thumbnail"
-                     loading="lazy"
-                     onmouseover="showKeywords(this.parentElement)"
-                     onerror="this.onerror=null;this.src='https://via.placeholder.com/300x180?text=Ошибка+загрузки'">
-                <div class="keywords-tooltip" id="keywords-${id}"></div>
-            </div>
-        `).join('');
-        // Добавляем обработчики клика
-        initTemplateClickHandlers();
-
+        allTemplateIds = await idsResponse.json();
+        
+        // Вычисляем общее количество страниц
+        totalPages = Math.ceil(allTemplateIds.length / ITEMS_PER_PAGE);
+        
+        // Загружаем первую страницу
+        loadPage(1);
+        
     } catch (error) {
         console.error('Ошибка загрузки шаблонов:', error);
         showError('Не удалось загрузить шаблоны');
@@ -57,13 +56,71 @@ async function loadTemplates() {
     }
 }
 
-// Инициализация обработчиков клика
+// Загрузка конкретной страницы
+function loadPage(page) {
+    if (page < 1 || page > totalPages) return;
+    
+    currentPage = page;
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, allTemplateIds.length);
+    const pageTemplateIds = allTemplateIds.slice(startIndex, endIndex);
+    
+    renderTemplates(pageTemplateIds);
+    updatePagination();
+}
+
+// Отрисовка шаблонов на странице
+function renderTemplates(templateIds) {
+    templatesGrid.innerHTML = templateIds.map(id => `
+        <div class="template-card" data-id="${id}">
+            <img src="${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOWNLOAD}/${id}?isPreview=true"
+                 alt="Шаблон мема"
+                 class="template-thumbnail"
+                 loading="lazy"
+                 onmouseover="showKeywords(this.parentElement)"
+                 onerror="this.onerror=null;this.src='https://via.placeholder.com/300x180?text=Ошибка+загрузки'">
+            <div class="keywords-tooltip" id="keywords-${id}"></div>
+        </div>
+    `).join('');
+    
+    initTemplateClickHandlers();
+}
+
+// Обновление пагинации
+function updatePagination() {
+    pageInfo.textContent = `Страница ${currentPage} из ${totalPages}`;
+    
+    prevPageBtn.disabled = currentPage === 1;
+    nextPageBtn.disabled = currentPage === totalPages;
+    
+    // Очищаем кнопки страниц
+    const pageButtons = paginationContainer.querySelectorAll('.pagination-btn:not(#prevPage):not(#nextPage)');
+    pageButtons.forEach(btn => btn.remove());
+    
+    // Добавляем кнопки страниц
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.className = `pagination-btn ${i === currentPage ? 'active' : ''}`;
+        pageBtn.textContent = i;
+        pageBtn.addEventListener('click', () => loadPage(i));
+        
+        paginationContainer.insertBefore(pageBtn, nextPageBtn);
+    }
+}
+
+// Инициализация обработчиков клика по карточкам
 function initTemplateClickHandlers() {
     document.querySelectorAll('.template-card').forEach(card => {
-        card.addEventListener('click', function () {
+        card.addEventListener('click', function(e) {
+            e.stopPropagation();
+            
             const templateId = this.dataset.id;
-            // Переходим к редактору с ID шаблона (относительный путь)
-            window.location.href = `editor/?templateId=${templateId}`;
+            if (templateId) {
+                window.location.href = `editor.html?templateId=${templateId}`;
+            }
         });
     });
 }
@@ -73,15 +130,12 @@ async function showKeywords(cardElement) {
     const templateId = cardElement.dataset.id;
     const tooltip = cardElement.querySelector('.keywords-tooltip');
 
-    // Если ключевые слова уже загружены, просто показываем их
     if (tooltip.textContent) return;
 
     try {
-        // Загружаем ключевые слова для шаблона
         const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEMPLATE_DETAILS}/${templateId}`);
         const templateData = await response.json();
 
-        // Отображаем ключевые слова
         if (templateData.keyWords && Array.isArray(templateData.keyWords)) {
             tooltip.textContent = templateData.keyWords.join(', ');
         } else {
@@ -98,7 +152,6 @@ function initUploadForm() {
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        // Валидация полей
         const keywords = templateKeywords.value.trim();
         if (!keywords) {
             alert('Введите ключевые слова через запятую');
@@ -110,12 +163,10 @@ function initUploadForm() {
             return;
         }
 
-        // Подготовка данных
         const formData = new FormData();
         formData.append('keyWords', keywords);
         formData.append('pic', templateFile.files[0]);
 
-        // Показать состояние загрузки
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загрузка...';
 
@@ -125,38 +176,29 @@ function initUploadForm() {
                 body: formData
             });
 
-            // Обработка ответа
             if (response.ok) {
-                // Успешный ответ (200-299)
                 try {
-                    // Пробуем прочитать JSON, но не блокируемся на ошибке
                     const data = await response.text();
                     try {
                         const json = JSON.parse(data);
-                        console.log('Успешный ответ JSON:', json);
-                        alert('Шаблон отправлен на модераци! ID: ' + (json.id || ''));
+                        alert('Шаблон отправлен на модерацию! ID: ' + (json.id || ''));
                     } catch {
-                        console.log('Сервер вернул текст:', data);
                         alert('Шаблон успешно загружен!');
                     }
-                } catch (error) {
-                    console.log('Пустой ответ сервера');
+                } catch {
                     alert('Шаблон успешно загружен!');
                 }
 
-                // Обновляем интерфейс
                 uploadModal.style.display = 'none';
                 uploadForm.reset();
-                loadTemplates();
+                loadAllTemplates(); // Перезагружаем все шаблоны
             } else {
-                // Ошибка сервера (4xx, 5xx)
                 let errorText = '';
                 try {
                     errorText = await response.text();
                     try {
                         const errorJson = JSON.parse(errorText);
                         if (errorJson.errors) {
-                            // Обработка ошибок валидации
                             const errors = Object.values(errorJson.errors).flat();
                             throw new Error(errors.join('\n'));
                         }
@@ -183,6 +225,9 @@ function showLoading(show) {
     loadingSpinner.style.display = show ? 'block' : 'none';
     if (show) {
         templatesGrid.innerHTML = '';
+        paginationContainer.style.display = 'none';
+    } else {
+        paginationContainer.style.display = 'flex';
     }
 }
 
@@ -194,11 +239,11 @@ function showError(message) {
             ${message}
         </div>
     `;
+    paginationContainer.style.display = 'none';
 }
 
 // Инициализация модальных окон
 function initModalWindows() {
-    // Открытие модальных окон
     uploadBtn.addEventListener('click', (e) => {
         e.preventDefault();
         uploadModal.style.display = 'flex';
@@ -221,7 +266,6 @@ function initModalWindows() {
         loginModal.style.display = 'flex';
     });
 
-    // Закрытие модальных окон
     closeButtons.forEach(button => {
         button.addEventListener('click', () => {
             uploadModal.style.display = 'none';
@@ -230,7 +274,6 @@ function initModalWindows() {
         });
     });
 
-    // Закрытие при клике вне модального окна
     window.addEventListener('click', (e) => {
         if (e.target === uploadModal) uploadModal.style.display = 'none';
         if (e.target === loginModal) loginModal.style.display = 'none';
@@ -238,15 +281,5 @@ function initModalWindows() {
     });
 }
 
-// Инициализация карточек шаблонов
-function initTemplateCards() {
-    templatesGrid.addEventListener('click', (e) => {
-        if (e.target.closest('.template-card')) {
-            const card = e.target.closest('.template-card');
-            const img = card.querySelector('img');
-            const imageUrl = img.src;
-            console.log('Выбран шаблон:', imageUrl);
-            // Здесь можно добавить открытие редактора
-        }
-    });
-}
+// Глобальные функции для обработки событий
+window.showKeywords = showKeywords;
