@@ -1,7 +1,6 @@
 import API_CONFIG from './api-config.js';
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Получаем параметры из URL
     const urlParams = new URLSearchParams(window.location.search);
     const templateId = urlParams.get('templateId');
     
@@ -15,50 +14,72 @@ document.addEventListener('DOMContentLoaded', function() {
     const fontSizeInput = document.getElementById('fontSize');
     const colorOptions = document.querySelectorAll('.color-option');
     const customColorInput = document.getElementById('customColor');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const finalDownloadBtn = document.getElementById('finalDownloadBtn');
+    const downloadBtn = document.getElementById('downloadBtn'); // Шаблон
+    const finalDownloadBtn = document.getElementById('finalDownloadBtn'); // Готовый мем
     const backBtn = document.getElementById('backBtn');
     
     // Переменные состояния
     let currentColor = 'white';
     let imageObj = new Image();
     let isImageLoaded = false;
+    let originalImageData = null;
     
-    // Загрузка изображения по templateId или использование заглушки
+    if (!templateId) {
+        alert('Шаблон не выбран. Вы будете перенаправлены на главную страницу.');
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 2000);
+        return;
+    }
+    
+    // Загрузка изображения
     function loadImage() {
-        if (templateId) {
-            // Если есть templateId, загружаем изображение с сервера
-            imageObj.src = `https://finely-mature-naiad.cloudpub.ru/api/templates/download/${templateId}`;
-        } else {
-            // Если нет templateId, используем заглушку
-            imageObj.src = 'https://via.placeholder.com/600x400?text=Выберите+шаблон+на+главной+странице';
-        }
+        // Без isPreview=true для редактора (полное качество)
+        imageObj.src = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOWNLOAD}/${templateId}?t=${new Date().getTime()}`;
         
         imageObj.onload = function() {
             isImageLoaded = true;
             resizeCanvas();
             drawMeme();
+            // Сохраняем оригинальное изображение без текста
+            saveOriginalImage();
         };
         
         imageObj.onerror = function() {
-            // Если ошибка загрузки, используем заглушку
+            console.error('Ошибка загрузки изображения с ID:', templateId);
             imageObj.src = 'https://via.placeholder.com/600x400?text=Ошибка+загрузки+шаблона';
             isImageLoaded = false;
+            
+            setTimeout(() => {
+                resizeCanvas();
+                drawMeme();
+            }, 100);
         };
     }
     
-    // Изменение размера canvas под изображение
+    // Сохранение оригинального изображения без текста
+    function saveOriginalImage() {
+        if (!isImageLoaded) return;
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        tempCtx.drawImage(imageObj, 0, 0, canvas.width, canvas.height);
+        originalImageData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Изменение размера canvas
     function resizeCanvas() {
         if (!isImageLoaded) return;
         
-        // Максимальные размеры для canvas
         const maxWidth = 800;
         const maxHeight = 600;
         
         let width = imageObj.width;
         let height = imageObj.height;
         
-        // Масштабирование если изображение слишком большое
         if (width > maxWidth || height > maxHeight) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = width * ratio;
@@ -86,16 +107,61 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.lineWidth = fontSize / 10;
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
         
         // Верхний текст
         const topText = topTextInput.value || ' ';
-        ctx.strokeText(topText, canvas.width / 2, fontSize + 10);
-        ctx.fillText(topText, canvas.width / 2, fontSize + 10);
+        if (topText.trim()) {
+            ctx.strokeText(topText, canvas.width / 2, 10);
+            ctx.fillText(topText, canvas.width / 2, 10);
+        }
         
         // Нижний текст
         const bottomText = bottomTextInput.value || ' ';
-        ctx.strokeText(bottomText, canvas.width / 2, canvas.height - 10);
-        ctx.fillText(bottomText, canvas.width / 2, canvas.height - 10);
+        if (bottomText.trim()) {
+            ctx.textBaseline = 'bottom';
+            ctx.strokeText(bottomText, canvas.width / 2, canvas.height - 10);
+            ctx.fillText(bottomText, canvas.width / 2, canvas.height - 10);
+        }
+    }
+    
+    // Скачивание оригинального шаблона (без текста)
+    function downloadOriginalTemplate() {
+        if (!isImageLoaded) {
+            alert('Изображение не загружено!');
+            return;
+        }
+        
+        // Создаем временный canvas для оригинального изображения
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Восстанавливаем оригинальное изображение
+        if (originalImageData) {
+            tempCtx.putImageData(originalImageData, 0, 0);
+        } else {
+            tempCtx.drawImage(imageObj, 0, 0, canvas.width, canvas.height);
+        }
+        
+        const link = document.createElement('a');
+        link.download = `meme-template-${templateId}.png`;
+        link.href = tempCanvas.toDataURL('image/png');
+        link.click();
+    }
+    
+    // Скачивание готового мема (с текстом)
+    function downloadFinishedMeme() {
+        if (!isImageLoaded) {
+            alert('Изображение не загружено!');
+            return;
+        }
+        
+        const link = document.createElement('a');
+        link.download = 'my-meme.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
     }
     
     // Обработчики событий
@@ -127,36 +193,21 @@ document.addEventListener('DOMContentLoaded', function() {
         drawMeme();
     });
     
-    // Кнопка скачивания
-    downloadBtn.addEventListener('click', function() {
-        if (!isImageLoaded) {
-            alert('Изображение не загружено!');
-            return;
-        }
-        
-        const link = document.createElement('a');
-        link.download = 'meme-template.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    });
+    // Кнопка скачивания шаблона (без текста)
+    downloadBtn.addEventListener('click', downloadOriginalTemplate);
     
-    finalDownloadBtn.addEventListener('click', function() {
-        if (!isImageLoaded) {
-            alert('Изображение не загружено!');
-            return;
-        }
-        
-        const link = document.createElement('a');
-        link.download = 'my-meme.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    });
+    // Кнопка скачивания готового мема (с текстом)
+    finalDownloadBtn.addEventListener('click', downloadFinishedMeme);
     
     // Кнопка назад
     backBtn.addEventListener('click', function() {
-        window.location.href = 'https://all-templates.github.io/all-templates-client/';
+        window.location.href = 'index.html';
     });
     
     // Инициализация
     loadImage();
+    
+    // Добавляем обработчики для кнопок пагинации
+    prevPageBtn.addEventListener('click', () => loadPage(currentPage - 1));
+    nextPageBtn.addEventListener('click', () => loadPage(currentPage + 1));
 });
