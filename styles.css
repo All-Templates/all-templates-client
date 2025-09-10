@@ -584,3 +584,125 @@ main {
         text-align: left;
     }
 }
+/* Стили для избранного и профиля */
+.profile-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.profile-btn:hover {
+    background: #e05d00;
+    transform: scale(1.1);
+}
+
+.profile-menu {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    padding: 10px 0;
+    min-width: 200px;
+    z-index: 1000;
+}
+
+.profile-menu a {
+    display: block;
+    padding: 10px 20px;
+    color: var(--dark-color);
+    text-decoration: none;
+    transition: background-color 0.3s ease;
+}
+
+.profile-menu a:hover {
+    background-color: #f8f9fa;
+}
+
+.profile-menu a i {
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+}
+
+/* Стили для избранного */
+.template-image-container {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    overflow: hidden;
+}
+
+.favorite-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+}
+
+.favorite-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.9);
+    color: #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.favorite-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    transform: scale(1.1);
+}
+
+.favorite-btn.favorited {
+    color: #ff4757;
+}
+
+.favorite-btn i {
+    font-size: 16px;
+}
+
+/* Бейдж для пользовательских загрузок */
+.user-upload-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--primary-color);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 10;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .profile-menu {
+        right: 10px;
+        left: 10px;
+    }
+    
+    .favorite-btn {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .favorite-btn i {
+        font-size: 14px;
+    }
+}
