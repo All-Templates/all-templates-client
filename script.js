@@ -21,7 +21,8 @@ const nextPageBtn = document.getElementById('nextPage');
 const pageInfo = document.getElementById('pageInfo');
 const searchInput = document.querySelector('.search-bar input');
 const searchButton = document.querySelector('.search-bar button');
-const adminPanelBtn = document.getElementById('adminPanelBtn');
+const profileMenu = document.getElementById('profileMenu');
+const profileBtn = document.getElementById('profileBtn');
 
 // Настройки пагинации
 const ITEMS_PER_PAGE = 12;
@@ -30,6 +31,9 @@ let totalPages = 1;
 let allTemplateIds = [];
 let currentSearchQuery = '';
 let currentUser = null;
+let userFavorites = new Set();
+let userUploads = new Set();
+let currentView = 'all'; // 'all', 'favorites', 'my-uploads'
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,8 +42,43 @@ document.addEventListener('DOMContentLoaded', () => {
     initUploadForm();
     initAuthForms();
     initSearch();
+    initProfileMenu();
     updateAuthUI();
 });
+
+// Инициализация меню профиля
+function initProfileMenu() {
+    profileBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        profileMenu.style.display = profileMenu.style.display === 'block' ? 'none' : 'block';
+    });
+
+    // Закрытие меню при клике вне его
+    document.addEventListener('click', (e) => {
+        if (profileMenu && !profileMenu.contains(e.target) && !profileBtn?.contains(e.target)) {
+            profileMenu.style.display = 'none';
+        }
+    });
+
+    // Обработчики пунктов меню
+    document.getElementById('viewFavorites')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showFavorites();
+        profileMenu.style.display = 'none';
+    });
+
+    document.getElementById('viewMyUploads')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showMyUploads();
+        profileMenu.style.display = 'none';
+    });
+
+    document.getElementById('viewAllTemplates')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        loadAllTemplates();
+        profileMenu.style.display = 'none';
+    });
+}
 
 // Инициализация поиска
 function initSearch() {
@@ -175,6 +214,10 @@ function updateAuthUI() {
     if (oldAdminIcon) oldAdminIcon.remove();
     if (oldAdminPanelBtn) oldAdminPanelBtn.remove();
 
+    // Удаляем старую кнопку профиля
+    const oldProfileBtn = document.getElementById('profileBtn');
+    if (oldProfileBtn) oldProfileBtn.remove();
+
     if (authToken) {
         // Парсим токен для получения информации о пользователе
         const decodedToken = parseJwt(authToken);
@@ -195,9 +238,6 @@ function updateAuthUI() {
                     alert('Вы вошли как администратор. Доступны функции модерации.');
                 });
                 
-                // Добавляем иконку рядом с кнопкой входа
-                loginBtn.parentNode.insertBefore(adminIcon, loginBtn.nextSibling);
-
                 // Создаем кнопку админ-панели
                 const adminPanelBtn = document.createElement('a');
                 adminPanelBtn.id = 'adminPanelBtn';
@@ -210,9 +250,25 @@ function updateAuthUI() {
                     showAdminPanel();
                 });
 
-                // Добавляем кнопку в навигацию
+                // Добавляем элементы в навигацию
+                loginBtn.parentNode.insertBefore(adminIcon, loginBtn.nextSibling);
                 loginBtn.parentNode.insertBefore(adminPanelBtn, loginBtn.nextSibling);
             }
+
+            // Создаем кнопку профиля для всех авторизованных пользователей
+            const profileBtn = document.createElement('a');
+            profileBtn.id = 'profileBtn';
+            profileBtn.href = '#';
+            profileBtn.className = 'profile-btn';
+            profileBtn.innerHTML = '<i class="fas fa-user"></i>';
+            profileBtn.title = 'Мой профиль';
+            profileBtn.style.marginLeft = '10px';
+
+            // Добавляем кнопку профиля
+            loginBtn.parentNode.insertBefore(profileBtn, loginBtn.nextSibling);
+
+            // Загружаем избранное и загрузки пользователя
+            loadUserData();
         }
 
         // Пользователь авторизован
@@ -223,10 +279,49 @@ function updateAuthUI() {
     } else {
         // Пользователь не авторизован
         currentUser = null;
+        userFavorites.clear();
+        userUploads.clear();
         loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Войти';
         loginBtn.removeEventListener('click', handleLogoutClick);
         loginBtn.addEventListener('click', handleLoginClick);
         uploadBtn.style.display = 'none';
+    }
+}
+
+// Загрузка данных пользователя (избранное и загрузки)
+async function loadUserData() {
+    try {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) return;
+
+        const headers = {
+            'Authorization': `Bearer ${authToken}`
+        };
+
+        // Загружаем избранное
+        const favsResponse = await fetch(`${API_CONFIG.BASE_URL}/User/favs`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (favsResponse.ok) {
+            const favorites = await favsResponse.json();
+            userFavorites = new Set(favorites);
+        }
+
+        // Загружаем загрузки пользователя
+        const uploadsResponse = await fetch(`${API_CONFIG.BASE_URL}/User/uploads`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (uploadsResponse.ok) {
+            const uploads = await uploadsResponse.json();
+            userUploads = new Set(uploads);
+        }
+
+    } catch (error) {
+        console.error('Ошибка загрузки данных пользователя:', error);
     }
 }
 
@@ -442,6 +537,136 @@ async function rejectTemplate(templateId) {
     }
 }
 
+// Показать избранное
+async function showFavorites() {
+    try {
+        showLoading(true);
+        currentView = 'favorites';
+        
+        if (userFavorites.size === 0) {
+            templatesGrid.innerHTML = `
+                <div class="no-results-message">
+                    <i class="fas fa-heart"></i>
+                    <h3>Нет избранных шаблонов</h3>
+                    <p>Добавляйте шаблоны в избранное, нажимая на сердечко.</p>
+                </div>
+            `;
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        allTemplateIds = Array.from(userFavorites);
+        totalPages = Math.ceil(allTemplateIds.length / ITEMS_PER_PAGE);
+        loadPage(1);
+
+    } catch (error) {
+        console.error('Ошибка загрузки избранного:', error);
+        showError('Ошибка загрузки избранного');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Показать мои загрузки
+async function showMyUploads() {
+    try {
+        showLoading(true);
+        currentView = 'my-uploads';
+        
+        if (userUploads.size === 0) {
+            templatesGrid.innerHTML = `
+                <div class="no-results-message">
+                    <i class="fas fa-upload"></i>
+                    <h3>Нет загруженных шаблонов</h3>
+                    <p>Загрузите свой первый шаблон, чтобы он появился здесь.</p>
+                </div>
+            `;
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        allTemplateIds = Array.from(userUploads);
+        totalPages = Math.ceil(allTemplateIds.length / ITEMS_PER_PAGE);
+        loadPage(1);
+
+    } catch (error) {
+        console.error('Ошибка загрузки загрузок:', error);
+        showError('Ошибка загрузки загрузок');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Добавить в избранное
+async function addToFavorites(templateId) {
+    try {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            alert('Для добавления в избранное необходимо войти в систему');
+            return;
+        }
+
+        const response = await fetch(`${API_CONFIG.BASE_URL}/User/favs/add?template=${templateId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            userFavorites.add(templateId);
+            updateFavoriteIcons();
+        } else {
+            throw new Error('Ошибка добавления в избранное');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Удалить из избранного
+async function removeFromFavorites(templateId) {
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_CONFIG.BASE_URL}/User/favs/remove?template=${templateId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            userFavorites.delete(templateId);
+            updateFavoriteIcons();
+            
+            // Если мы в режиме просмотра избранного, обновляем список
+            if (currentView === 'favorites') {
+                showFavorites();
+            }
+        } else {
+            throw new Error('Ошибка удаления из избранного');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Обновить иконки избранного
+function updateFavoriteIcons() {
+    document.querySelectorAll('.favorite-btn').forEach(btn => {
+        const templateId = btn.closest('.template-card').dataset.id;
+        if (userFavorites.has(parseInt(templateId))) {
+            btn.innerHTML = '<i class="fas fa-heart"></i>';
+            btn.classList.add('favorited');
+        } else {
+            btn.innerHTML = '<i class="far fa-heart"></i>';
+            btn.classList.remove('favorited');
+        }
+    });
+}
+
 function handleLoginClick(e) {
     e.preventDefault();
     loginModal.style.display = 'flex';
@@ -451,8 +676,11 @@ function handleLogoutClick(e) {
     e.preventDefault();
     localStorage.removeItem('authToken');
     currentUser = null;
+    userFavorites.clear();
+    userUploads.clear();
     alert('Вы вышли из системы.');
     updateAuthUI();
+    loadAllTemplates();
 }
 
 // Инициализация форм авторизации
@@ -554,6 +782,7 @@ function initAuthForms() {
 async function loadAllTemplates() {
     try {
         showLoading(true);
+        currentView = 'all';
         
         // Загружаем список всех ID шаблонов
         const idsResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEMPLATES}`);
@@ -590,13 +819,24 @@ function loadPage(page) {
 function renderTemplates(templateIds) {
     templatesGrid.innerHTML = templateIds.map(id => `
         <div class="template-card" data-id="${id}">
-            <img src="${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOWNLOAD}/${id}?isPreview=true"
-                 alt="Шаблон мема"
-                 class="template-thumbnail"
-                 loading="lazy"
-                 onmouseover="showKeywords(this.parentElement)"
-                 onerror="this.onerror=null;this.src='https://via.placeholder.com/300x180?text=Ошибка+загрузки'">
+            <div class="template-image-container">
+                <img src="${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOWNLOAD}/${id}?isPreview=true"
+                     alt="Шаблон мема"
+                     class="template-thumbnail"
+                     loading="lazy"
+                     onmouseover="showKeywords(this.parentElement.parentElement)"
+                     onerror="this.onerror=null;this.src='https://via.placeholder.com/300x180?text=Ошибка+загрузки'">
+                ${currentUser ? `
+                <div class="favorite-overlay">
+                    <button class="favorite-btn ${userFavorites.has(id) ? 'favorited' : ''}" 
+                            onclick="event.stopPropagation(); ${userFavorites.has(id) ? 'removeFromFavorites' : 'addToFavorites'}(${id})">
+                        <i class="${userFavorites.has(id) ? 'fas' : 'far'} fa-heart"></i>
+                    </button>
+                </div>
+                ` : ''}
+            </div>
             <div class="keywords-tooltip" id="keywords-${id}"></div>
+            ${userUploads.has(id) ? '<div class="user-upload-badge">Мой шаблон</div>' : ''}
         </div>
     `).join('');
     
@@ -632,8 +872,9 @@ function updatePagination() {
 function initTemplateClickHandlers() {
     document.querySelectorAll('.template-card').forEach(card => {
         card.addEventListener('click', function(e) {
-            e.stopPropagation();
+            if (e.target.closest('.favorite-btn')) return;
             
+            e.stopPropagation();
             const templateId = this.dataset.id;
             if (templateId) {
                 window.location.href = `editor.html?templateId=${templateId}`;
@@ -707,8 +948,10 @@ function initUploadForm() {
                     try {
                         const json = JSON.parse(data);
                         alert('Шаблон отправлен на модерацию! ID: ' + (json.id || ''));
+                        userUploads.add(parseInt(json.id || data));
                     } catch {
                         alert('Шаблон успешно загружен! ID: ' + data);
+                        userUploads.add(parseInt(data));
                     }
                 } catch {
                     alert('Шаблон успешно загружен!');
@@ -809,3 +1052,7 @@ window.clearSearch = clearSearch;
 window.showAdminPanel = showAdminPanel;
 window.approveTemplate = approveTemplate;
 window.rejectTemplate = rejectTemplate;
+window.addToFavorites = addToFavorites;
+window.removeFromFavorites = removeFromFavorites;
+window.showFavorites = showFavorites;
+window.showMyUploads = showMyUploads;
