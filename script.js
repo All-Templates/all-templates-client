@@ -31,7 +31,136 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAllTemplates();
     initModalWindows();
     initUploadForm();
+    initAuthForms(); // Инициализируем формы авторизации
+    updateAuthUI(); // Проверяем статус аутентификации при загрузке
 });
+
+// Функция для обновления UI в зависимости от статуса авторизации
+function updateAuthUI() {
+    const authToken = localStorage.getItem('authToken');
+    const loginBtn = document.getElementById('loginBtn');
+
+    if (authToken) {
+        // Пользователь авторизован
+        loginBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Выйти';
+        loginBtn.removeEventListener('click', handleLoginClick);
+        loginBtn.addEventListener('click', handleLogoutClick);
+        uploadBtn.style.display = 'inline-flex';
+    } else {
+        // Пользователь не авторизован
+        loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Войти';
+        loginBtn.removeEventListener('click', handleLogoutClick);
+        loginBtn.addEventListener('click', handleLoginClick);
+        uploadBtn.style.display = 'none';
+    }
+}
+
+function handleLoginClick(e) {
+    e.preventDefault();
+    loginModal.style.display = 'flex';
+}
+
+function handleLogoutClick(e) {
+    e.preventDefault();
+    localStorage.removeItem('authToken');
+    alert('Вы вышли из системы.');
+    updateAuthUI();
+}
+
+// Инициализация форм авторизации
+function initAuthForms() {
+    // Обработчик формы регистрации
+    document.querySelector('#registerModal form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const login = document.getElementById('registerUsername').value;
+        const password = document.getElementById('registerPassword').value;
+
+        // Валидация
+        if (!login || !password) {
+            alert('Пожалуйста, заполните все поля.');
+            return;
+        }
+
+        if (password.length < 4) {
+            alert('Пароль должен содержать минимум 4 символа.');
+            return;
+        }
+
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Регистрация...';
+
+        try {
+            const response = await fetch(`${API_CONFIG.BASE_URL}/User/register?login=${encodeURIComponent(login)}&password=${encodeURIComponent(password)}`, {
+                method: 'GET'
+            });
+
+            if (response.ok) {
+                const token = await response.text();
+                localStorage.setItem('authToken', token);
+                registerModal.style.display = 'none';
+                alert('Регистрация успешна! Вы автоматически вошли в систему.');
+                updateAuthUI();
+                this.reset();
+            } else if (response.status === 409) {
+                throw new Error('Пользователь с таким логином уже существует.');
+            } else {
+                const errorText = await response.text();
+                throw new Error(errorText || `Ошибка сервера: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Ошибка регистрации:', error);
+            alert('Ошибка регистрации: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Зарегистрироваться';
+        }
+    });
+
+    // Обработчик формы входа
+    document.querySelector('#loginModal form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const login = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+
+        if (!login || !password) {
+            alert('Пожалуйста, введите логин и пароль.');
+            return;
+        }
+
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Вход...';
+
+        try {
+            const response = await fetch(`${API_CONFIG.BASE_URL}/User/login?login=${encodeURIComponent(login)}&password=${encodeURIComponent(password)}`, {
+                method: 'GET'
+            });
+
+            if (response.ok) {
+                const token = await response.text();
+                localStorage.setItem('authToken', token);
+                loginModal.style.display = 'none';
+                alert('Вход выполнен успешно!');
+                updateAuthUI();
+                this.reset();
+            } else if (response.status === 404) {
+                throw new Error('Неверный логин или пароль.');
+            } else {
+                const errorText = await response.text();
+                throw new Error(errorText || `Ошибка сервера: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Ошибка входа:', error);
+            alert('Ошибка входа: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Войти';
+        }
+    });
+}
 
 // Загрузка всех шаблонов для пагинации
 async function loadAllTemplates() {
@@ -171,9 +300,17 @@ function initUploadForm() {
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загрузка...';
 
         try {
+            const authToken = localStorage.getItem('authToken');
+            const headers = {};
+
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
             const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CREATE}`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: headers
             });
 
             if (response.ok) {
@@ -183,7 +320,7 @@ function initUploadForm() {
                         const json = JSON.parse(data);
                         alert('Шаблон отправлен на модерацию! ID: ' + (json.id || ''));
                     } catch {
-                        alert('Шаблон успешно загружен!');
+                        alert('Шаблон успешно загружен! ID: ' + data);
                     }
                 } catch {
                     alert('Шаблон успешно загружен!');
@@ -249,10 +386,7 @@ function initModalWindows() {
         uploadModal.style.display = 'flex';
     });
 
-    loginBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        loginModal.style.display = 'flex';
-    });
+    loginBtn.addEventListener('click', handleLoginClick);
 
     showRegister.addEventListener('click', (e) => {
         e.preventDefault();
