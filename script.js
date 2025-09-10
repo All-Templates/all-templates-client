@@ -19,28 +19,202 @@ const paginationContainer = document.getElementById('pagination');
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const pageInfo = document.getElementById('pageInfo');
+const searchInput = document.querySelector('.search-bar input');
+const searchButton = document.querySelector('.search-bar button');
+const adminPanelBtn = document.getElementById('adminPanelBtn');
 
 // Настройки пагинации
 const ITEMS_PER_PAGE = 12;
 let currentPage = 1;
 let totalPages = 1;
 let allTemplateIds = [];
+let currentSearchQuery = '';
+let currentUser = null;
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadAllTemplates();
     initModalWindows();
     initUploadForm();
-    initAuthForms(); // Инициализируем формы авторизации
-    updateAuthUI(); // Проверяем статус аутентификации при загрузке
+    initAuthForms();
+    initSearch();
+    updateAuthUI();
 });
+
+// Инициализация поиска
+function initSearch() {
+    // Поиск по кнопке
+    searchButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        performSearch();
+    });
+
+    // Поиск по Enter
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+
+    // Кнопка очистки поиска
+    const clearSearchBtn = document.createElement('button');
+    clearSearchBtn.innerHTML = '<i class="fas fa-times"></i>';
+    clearSearchBtn.className = 'clear-search-btn';
+    clearSearchBtn.style.display = 'none';
+    clearSearchBtn.addEventListener('click', clearSearch);
+    
+    searchInput.parentNode.appendChild(clearSearchBtn);
+
+    // Показываем/скрываем кнопку очистки
+    searchInput.addEventListener('input', function() {
+        clearSearchBtn.style.display = this.value ? 'block' : 'none';
+    });
+}
+
+// Выполнение поиска
+async function performSearch() {
+    const query = searchInput.value.trim();
+    
+    if (!query) {
+        clearSearch();
+        return;
+    }
+
+    currentSearchQuery = query;
+    await searchTemplates(query);
+}
+
+// Очистка поиска
+function clearSearch() {
+    searchInput.value = '';
+    currentSearchQuery = '';
+    const clearBtn = document.querySelector('.clear-search-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    loadAllTemplates();
+}
+
+// Поиск шаблонов по ключевым словам
+async function searchTemplates(query) {
+    try {
+        showLoading(true);
+        
+        const authToken = localStorage.getItem('authToken');
+        const headers = {};
+        
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(`${API_CONFIG.BASE_URL}/Templates/search?q=${encodeURIComponent(query)}`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка поиска: ${response.status}`);
+        }
+
+        const searchResults = await response.json();
+        allTemplateIds = searchResults;
+        totalPages = Math.ceil(allTemplateIds.length / ITEMS_PER_PAGE);
+        
+        if (allTemplateIds.length === 0) {
+            showNoResultsMessage(query);
+        } else {
+            loadPage(1);
+        }
+
+    } catch (error) {
+        console.error('Ошибка поиска:', error);
+        showError('Ошибка при выполнении поиска');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Сообщение об отсутствии результатов
+function showNoResultsMessage(query) {
+    templatesGrid.innerHTML = `
+        <div class="no-results-message">
+            <i class="fas fa-search"></i>
+            <h3>Ничего не найдено</h3>
+            <p>По запросу "${query}" не найдено ни одного шаблона.</p>
+            <button class="btn btn-outline" onclick="clearSearch()">
+                <i class="fas fa-times"></i> Очистить поиск
+            </button>
+        </div>
+    `;
+    paginationContainer.style.display = 'none';
+}
+
+// Декодирование JWT токена для получения информации о пользователе
+function parseJwt(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        return JSON.parse(jsonPayload);
+    } catch (error) {
+        console.error('Ошибка парсинга JWT:', error);
+        return null;
+    }
+}
 
 // Функция для обновления UI в зависимости от статуса авторизации
 function updateAuthUI() {
     const authToken = localStorage.getItem('authToken');
     const loginBtn = document.getElementById('loginBtn');
 
+    // Удаляем старые иконки админа, если они есть
+    const oldAdminIcon = document.querySelector('.admin-icon');
+    const oldAdminPanelBtn = document.getElementById('adminPanelBtn');
+    if (oldAdminIcon) oldAdminIcon.remove();
+    if (oldAdminPanelBtn) oldAdminPanelBtn.remove();
+
     if (authToken) {
+        // Парсим токен для получения информации о пользователе
+        const decodedToken = parseJwt(authToken);
+        currentUser = decodedToken;
+
+        if (decodedToken) {
+            // Проверяем, является ли пользователь админом
+            const isAdmin = decodedToken[ClaimTypes.Role] === 'Admin';
+            
+            if (isAdmin) {
+                // Создаем иконку гаечного ключа для админа
+                const adminIcon = document.createElement('div');
+                adminIcon.className = 'admin-icon';
+                adminIcon.innerHTML = '<i class="fas fa-cog" title="Режим администратора"></i>';
+                adminIcon.style.marginLeft = '10px';
+                adminIcon.style.cursor = 'pointer';
+                adminIcon.addEventListener('click', () => {
+                    alert('Вы вошли как администратор. Доступны функции модерации.');
+                });
+                
+                // Добавляем иконку рядом с кнопкой входа
+                loginBtn.parentNode.insertBefore(adminIcon, loginBtn.nextSibling);
+
+                // Создаем кнопку админ-панели
+                const adminPanelBtn = document.createElement('a');
+                adminPanelBtn.id = 'adminPanelBtn';
+                adminPanelBtn.href = '#';
+                adminPanelBtn.className = 'btn btn-outline';
+                adminPanelBtn.innerHTML = '<i class="fas fa-shield-alt"></i> Модерация';
+                adminPanelBtn.style.marginLeft = '10px';
+                adminPanelBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showAdminPanel();
+                });
+
+                // Добавляем кнопку в навигацию
+                loginBtn.parentNode.insertBefore(adminPanelBtn, loginBtn.nextSibling);
+            }
+        }
+
         // Пользователь авторизован
         loginBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Выйти';
         loginBtn.removeEventListener('click', handleLoginClick);
@@ -48,10 +222,223 @@ function updateAuthUI() {
         uploadBtn.style.display = 'inline-flex';
     } else {
         // Пользователь не авторизован
+        currentUser = null;
         loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Войти';
         loginBtn.removeEventListener('click', handleLogoutClick);
         loginBtn.addEventListener('click', handleLoginClick);
         uploadBtn.style.display = 'none';
+    }
+}
+
+// Константы для ClaimTypes
+const ClaimTypes = {
+    NameIdentifier: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
+    Role: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+};
+
+// Показать админ-панель
+async function showAdminPanel() {
+    try {
+        showLoading(true);
+        
+        const authToken = localStorage.getItem('authToken');
+        const headers = {
+            'Authorization': `Bearer ${authToken}`
+        };
+
+        // Загружаем шаблоны, ожидающие модерации
+        const response = await fetch(`${API_CONFIG.BASE_URL}/Templates/unchecked`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки шаблонов для модерации');
+        }
+
+        const templateIds = await response.json();
+        
+        if (templateIds.length === 0) {
+            templatesGrid.innerHTML = `
+                <div class="no-results-message">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>Нет шаблонов для модерации</h3>
+                    <p>Все шаблоны проверены. Нет новых заявок на модерацию.</p>
+                </div>
+            `;
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        // Загружаем детальную информацию о каждом шаблоне
+        const templatesData = await Promise.all(
+            templateIds.map(async (id) => {
+                const templateResponse = await fetch(`${API_CONFIG.BASE_URL}/Templates/${id}`);
+                if (!templateResponse.ok) return null;
+                
+                const templateData = await templateResponse.json();
+                
+                // Загружаем информацию о пользователе
+                let userInfo = 'Анонимно';
+                if (templateData.senderId) {
+                    try {
+                        const userResponse = await fetch(`${API_CONFIG.BASE_URL}/User/info/${templateData.senderId}`, {
+                            headers: headers
+                        });
+                        if (userResponse.ok) {
+                            const userData = await userResponse.json();
+                            userInfo = userData.login;
+                        }
+                    } catch (error) {
+                        console.error('Ошибка загрузки информации о пользователе:', error);
+                    }
+                }
+
+                // Получаем информацию о файле
+                let fileSize = 'Неизвестно';
+                try {
+                    const fileResponse = await fetch(`${API_CONFIG.BASE_URL}/Templates/fileinfo/${id}`, {
+                        headers: headers
+                    });
+                    if (fileResponse.ok) {
+                        const fileData = await fileResponse.json();
+                        fileSize = formatFileSize(fileData.size);
+                    }
+                } catch (error) {
+                    console.error('Ошибка загрузки информации о файле:', error);
+                }
+
+                return {
+                    id: id,
+                    keyWords: templateData.keyWords || [],
+                    sender: userInfo,
+                    fileSize: fileSize
+                };
+            })
+        );
+
+        // Отображаем админ-панель
+        renderAdminPanel(templatesData.filter(template => template !== null));
+
+    } catch (error) {
+        console.error('Ошибка загрузки админ-панели:', error);
+        alert('Ошибка: ' + error.message);
+        loadAllTemplates(); // Возвращаемся к обычному виду
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Форматирование размера файла
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Отрисовка админ-панели
+function renderAdminPanel(templates) {
+    templatesGrid.innerHTML = `
+        <div class="admin-panel-header">
+            <h3><i class="fas fa-shield-alt"></i> Панель модерации</h3>
+            <p>Шаблоны, ожидающие проверки: ${templates.length}</p>
+        </div>
+        <div class="admin-templates-list">
+            ${templates.map(template => `
+                <div class="admin-template-card" data-id="${template.id}">
+                    <div class="template-preview">
+                        <img src="${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOWNLOAD}/${template.id}?isPreview=true"
+                             alt="Шаблон мема"
+                             onerror="this.onerror=null;this.src='https://via.placeholder.com/200x150?text=Ошибка+загрузки'">
+                    </div>
+                    <div class="template-info">
+                        <div class="info-row">
+                            <label>ID:</label>
+                            <span>${template.id}</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Теги:</label>
+                            <span class="keywords">${template.keyWords.join(', ') || 'Нет тегов'}</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Пользователь:</label>
+                            <span>${template.sender}</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Размер файла:</label>
+                            <span>${template.fileSize}</span>
+                        </div>
+                    </div>
+                    <div class="admin-actions">
+                        <button class="btn btn-success approve-btn" onclick="approveTemplate(${template.id})">
+                            <i class="fas fa-check"></i> Одобрить
+                        </button>
+                        <button class="btn btn-danger reject-btn" onclick="rejectTemplate(${template.id})">
+                            <i class="fas fa-times"></i> Отклонить
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <div class="admin-panel-footer">
+            <button class="btn btn-outline" onclick="loadAllTemplates()">
+                <i class="fas fa-arrow-left"></i> Вернуться к галерее
+            </button>
+        </div>
+    `;
+
+    paginationContainer.style.display = 'none';
+}
+
+// Одобрить шаблон
+async function approveTemplate(templateId) {
+    if (!confirm('Одобрить этот шаблон?')) return;
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_CONFIG.BASE_URL}/Templates/approve/${templateId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            alert('Шаблон одобрен!');
+            showAdminPanel(); // Обновляем панель
+        } else {
+            throw new Error('Ошибка одобрения шаблона');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Отклонить шаблон
+async function rejectTemplate(templateId) {
+    if (!confirm('Отклонить этот шаблон?')) return;
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_CONFIG.BASE_URL}/Templates/reject/${templateId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            alert('Шаблон отклонен!');
+            showAdminPanel(); // Обновляем панель
+        } else {
+            throw new Error('Ошибка отклонения шаблона');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка: ' + error.message);
     }
 }
 
@@ -63,6 +450,7 @@ function handleLoginClick(e) {
 function handleLogoutClick(e) {
     e.preventDefault();
     localStorage.removeItem('authToken');
+    currentUser = null;
     alert('Вы вышли из системы.');
     updateAuthUI();
 }
@@ -417,3 +805,7 @@ function initModalWindows() {
 
 // Глобальные функции для обработки событий
 window.showKeywords = showKeywords;
+window.clearSearch = clearSearch;
+window.showAdminPanel = showAdminPanel;
+window.approveTemplate = approveTemplate;
+window.rejectTemplate = rejectTemplate;
